@@ -15,7 +15,7 @@ export interface PackageJson {
   version?: string;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface AffectedPackageResult {

@@ -22,6 +22,8 @@ export default function PackageChecker() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
+  const [isValidPackageJsonShape, setIsValidPackageJsonShape] = useState(false);
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
   // Load affected packages data on mount
   useEffect(() => {
@@ -73,26 +75,67 @@ export default function PackageChecker() {
   };
 
   const loadSampleJson = () => {
+    // Provide a minimal sample that only includes dependencies/devDependencies so
+    // it passes the stricter textarea validation (no extra top-level fields).
     const sampleJson = {
-      name: "admin",
-      version: "0.1.1",
       dependencies: {
-        "@hookform/resolvers": "^3.10.0",
-        "@prisma/client": "6.11.0",
-        "@radix-ui/react-accordion": "^1.2.11",
-        "@radix-ui/react-dialog": "^1.1.14",
         "next": "15.0.1",
-        "react": "18.3.1",
+        "react": "18.3.1"
       },
       devDependencies: {
-        "@types/node": "^20",
-        "@types/react": "^18",
         "eslint": "^8",
-        "typescript": "^5",
-      },
+        "typescript": "^5"
+      }
     };
     setPackageJsonInput(JSON.stringify(sampleJson, null, 2));
   };
+
+  // Validate textarea JSON shape: must be an object with exactly two keys:
+  // 'dependencies' and 'devDependencies' (no other top-level fields allowed).
+  useEffect(() => {
+    const raw = packageJsonInput?.trim();
+    if (!raw) {
+      setIsValidPackageJsonShape(false);
+      setValidationMessage(null);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        setIsValidPackageJsonShape(false);
+        setValidationMessage("Top-level JSON must be an object containing only 'dependencies' and 'devDependencies'.");
+        return;
+      }
+
+      const keys = Object.keys(parsed);
+      const allowed = ["dependencies", "devDependencies"];
+
+      const hasExactlyAllowedKeys = keys.length === allowed.length && allowed.every((k) => keys.includes(k));
+      if (!hasExactlyAllowedKeys) {
+        setIsValidPackageJsonShape(false);
+        setValidationMessage(`Invalid fields: expected only 'dependencies' and 'devDependencies', found: ${keys.join(", ") || "(none)"}`);
+        return;
+      }
+
+      if (typeof parsed.dependencies !== "object" || parsed.dependencies === null || Array.isArray(parsed.dependencies)) {
+        setIsValidPackageJsonShape(false);
+        setValidationMessage("'dependencies' must be an object (or empty object).");
+        return;
+      }
+      if (typeof parsed.devDependencies !== "object" || parsed.devDependencies === null || Array.isArray(parsed.devDependencies)) {
+        setIsValidPackageJsonShape(false);
+        setValidationMessage("'devDependencies' must be an object (or empty object).");
+        return;
+      }
+
+      setIsValidPackageJsonShape(true);
+      setValidationMessage(null);
+    } catch {
+      setIsValidPackageJsonShape(false);
+      setValidationMessage("Invalid JSON format.");
+    }
+  }, [packageJsonInput]);
 
   if (dataLoading) {
     return (
@@ -146,12 +189,16 @@ export default function PackageChecker() {
                 placeholder='Paste your package.json content here...'
                 value={packageJsonInput}
                 onChange={(e) => setPackageJsonInput(e.target.value)}
-                className="h-[400px] font-mono text-sm overflow-auto resize-none"
+                className="h-[360px] font-mono text-sm overflow-auto resize-none"
               />
+              {validationMessage && (
+                <div className="text-sm text-red-600">{validationMessage}</div>
+              )}
+
               <div className="flex space-x-2">
                 <Button
                   onClick={handleCheck}
-                  disabled={!packageJsonInput || loading}
+                  disabled={!packageJsonInput || loading || !isValidPackageJsonShape}
                   className="flex-1"
                 >
                   {loading ? "Checking..." : "Check Packages"}
@@ -198,7 +245,7 @@ export default function PackageChecker() {
               {!checkResult && !error && (
                 <div className="text-center py-12 text-gray-400">
                   <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p>No results yet. Paste your package.json and click "Check Packages"</p>
+                  <p>No results yet. Paste your package.json and click &quot;Check Packages&quot;</p>
                 </div>
               )}
 
